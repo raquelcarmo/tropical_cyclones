@@ -108,6 +108,8 @@ def load_from_df_with_cat(df):
 
 
 def compute_class_weights(csv_path):
+  # source: https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#class_weights
+  
   # read csv file
   df = pd.read_csv(csv_path, converters={'bbox_shape': eval}).dropna()
   labels = np.zeros(len(df), dtype=int)
