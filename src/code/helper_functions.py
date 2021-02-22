@@ -171,16 +171,19 @@ def rot90(image, label):
 
 def configure_for_performance(ds, BUFFER_SIZE, BATCH_SIZE, shuffle = False, augment = False):
   ds = ds.cache()
+  
   if shuffle:
     ds = ds.shuffle(buffer_size = BUFFER_SIZE)
+    
   # use data augmentation only on the training set
   if augment:
-    #aug_ds = ds.map(data_augmentation, num_parallel_calls = AUTOTUNE)
-    #ds = ds.concatenate(aug_ds)
-    vert_ds = ds.map(vertical_flip, num_parallel_calls = AUTOTUNE)
-    hor_ds = ds.map(horizontal_flip, num_parallel_calls = AUTOTUNE)
-    rot_ds = ds.map(rot90, num_parallel_calls = AUTOTUNE)
-    ds = ds.concatenate(vert_ds).concatenate(hor_ds).concatenate(rot_ds)
+    aug_ds = ds.map(data_augmentation, num_parallel_calls = AUTOTUNE)
+    ds = ds.concatenate(aug_ds)
+    #vert_ds = ds.map(vertical_flip, num_parallel_calls = AUTOTUNE)
+    #hor_ds = ds.map(horizontal_flip, num_parallel_calls = AUTOTUNE)
+    #rot_ds = ds.map(rot90, num_parallel_calls = AUTOTUNE)
+    #ds = ds.concatenate(vert_ds).concatenate(hor_ds).concatenate(rot_ds)
+    
   # batch all datasets
   ds = ds.batch(batch_size = BATCH_SIZE)
   # use buffered prefecting on all datasets
@@ -202,7 +205,7 @@ def prepare_dataset(processor, images, labels, bboxes):
       
   # create a zipped dataset with the processed images and the labels
   ds = Dataset.zip((processed_images_dataset, labels_dataset))
-  print(len(list(ds.as_numpy_iterator())))
+  #print(len(list(ds.as_numpy_iterator())))
   return ds
 
 
@@ -221,7 +224,7 @@ def create_dataset(processor, ncrops, images, labels, bboxes):
     # pad images to the dimensions required
     padded_image, bbox_padded = processor.padding(image, bbox_rotated)
     height, width = padded_image.shape[:2]
-    #print("Original:")
+    #print("Padded:")
     #cv2_imshow(padded_image)
     
     if height > 288 or width > 288:
@@ -238,7 +241,7 @@ def create_dataset(processor, ncrops, images, labels, bboxes):
 
   # create a dataset with the processed images and the labels
   ds = Dataset.from_tensor_slices((processed_images_dataset, labels_dataset))
-  print(len(list(ds.as_numpy_iterator())))
+  #print(len(list(ds.as_numpy_iterator())))
   return ds
 
 
@@ -264,3 +267,32 @@ def z_norm(train_ds, val_ds):
   train_ds = train_ds.map(norm, num_parallel_calls = AUTOTUNE)
   val_ds = val_ds.map(norm, num_parallel_calls = AUTOTUNE)
   return train_ds, val_ds
+
+
+def normalisation(train_ds, val_ds, mode = "", model = ""):
+    if mode == "model":
+        def model_norm(image, label):
+            if model == "ResNet":
+                new = resnet50.preprocess_input(image)
+            else:   # MobileNetV2
+                new = mobilenet_v2.preprocess_input(image)
+            return new, label
+        func = model_norm
+        
+    elif mode == "z-norm":
+        mean, std = get_stats(train_ds, val_ds)
+
+          def z_norm(image, label, mean = mean, std = std):
+            new = (image - mean) / std
+            return new, label
+        func = z_norm
+    
+    else:   # simple normalisation between 0 and 1
+        def simple_norm(image, label):
+            new = image/np.max(image)
+            return new, label
+        func = simple_norm
+    
+    train_ds = train_ds.map(func, num_parallel_calls = AUTOTUNE)
+    val_ds = val_ds.map(func, num_parallel_calls = AUTOTUNE)
+    return train_ds, val_ds
