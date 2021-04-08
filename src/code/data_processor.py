@@ -9,35 +9,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import math
-import os.path
-import time
-from PIL import Image
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy import ndimage
 from google.colab.patches import cv2_imshow
-import random
 from shapely.geometry import Point
-import re
-import pickle
-import scipy
-from sklearn.model_selection import StratifiedKFold
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard
-import datetime
-
 import tensorflow as tf
-import tensorflow_datasets as tfds
-from tensorflow.data import Dataset
-from tensorflow.keras import Input
 from tensorflow.keras.applications import resnet50, mobilenet_v2, vgg16
-from tensorflow.keras.applications.resnet50 import ResNet50
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
-from tensorflow.keras.applications.vgg16 import VGG16
-from tensorflow.keras.models import Model
-from tensorflow.keras import layers
-from tensorflow.keras.layers import concatenate, Dense, GlobalAveragePooling2D
-from tensorflow.keras.optimizers import SGD, Adam
-from tensorflow.keras.metrics import CategoricalAccuracy, Precision, Recall, TruePositives, FalsePositives, TrueNegatives, FalseNegatives
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
 class DataProcessor():
