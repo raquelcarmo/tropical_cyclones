@@ -28,9 +28,10 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow.data import Dataset
 from tensorflow.keras import Input
-from tensorflow.keras.applications import resnet50, mobilenet_v2
+from tensorflow.keras.applications import resnet50, mobilenet_v2, vgg16
 from tensorflow.keras.applications.resnet50 import ResNet50
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
+from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.models import Model
 from tensorflow.keras import layers
 from tensorflow.keras.layers import concatenate, Dense, GlobalAveragePooling2D
@@ -55,13 +56,24 @@ class DataProcessor():
 
 
   def preprocess_pipeline(self, image_path, bbox):
-    ''' Defines the preprocess pipeline '''
+    '''
+    Defines the preprocess pipeline for a SINGLE IMAGE.
+    Inputs: 
+        - image_path: path where the image is stored
+        - bbox: array with location and dimensions of the bounding box in the image
+    Outputs:
+        - output_image: image after the pre-processing pipeline of {rotation},
+        padding and cropping to standard size
+        - bbox_sized: bounding box array tranformed during the pre-processing chain
+    '''
     image_path = image_path.numpy().decode('utf-8')
     bbox = bbox.numpy()
     if self.show_prints:
       print("[START]: preprocess_pipeline")
       print(image_path, bbox)
     self.img_name = os.path.basename(image_path)[:-4]
+    
+    # [NOT NEEDED FOR NOW]
     #filelist = glob.glob("SAR_swath_masks/" + image_path.split('/')[1] + '/' + self.img_name + "*.npy")
     #mask = np.load(filelist[0]) if filelist != [] else None
 
@@ -82,16 +94,16 @@ class DataProcessor():
         
     # perform padding and then cropping to the images
     padded_image, bbox_padded = self.padding(image, bbox_rotated)
-    sized_image = self.random_crop(padded_image, bbox_padded)
+    sized_image, bbox_sized = self.random_crop(padded_image, bbox_padded)
     
-    # perform normalisation to the images
-    output_image = self.normalisation(sized_image, mode = "model") if self.normalise else sized_image
+    # [DEPRECATED] perform normalisation to the images 
+    #output_image = self.normalisation(sized_image, mode = "model") if self.normalise else sized_image
     # force land values to be zero
     #output_image[mask == 1] = 0
 
     if self.show_prints:
       print("[END]: preprocess_pipeline")
-    return output_image, bbox  
+    return sized_image, bbox_sized  
 
 
   def padding(self, image, bbox):
@@ -129,18 +141,17 @@ class DataProcessor():
 
 
   def normalisation(self, image, mode = ""):
-    '''Takes an input image and returns a normalised version of it'''
-
-    if mode == "z_norm":  # values z transformation
-      #n_im = (image - mean) / std
-      image[..., 0] -= mean[0]
-      image[..., 1] -= mean[1]
-      image[..., 2] -= mean[2]
-      if self.std is not None:
-        image[..., 0] /= std[0]
-        image[..., 1] /= std[1]
-        image[..., 2] /= std[2]
-      n_im = image
+    '''[DEPRECATED - use helper.normalisation method instead]
+    Takes an input image and returns a normalised version of it'''
+    if mode == "z_norm":
+      im = image.astype(np.float32)
+      im[im == 0] = np.nan
+      # compute mean and std of image
+      mean = np.nanmean(im)
+      std = np.nanstd(im)
+      # apply z transform
+      n_im = (im - mean) / std
+      n_im = np.nan_to_num(n_im)
 
     elif mode == "model":
       if self.model == "ResNet":
@@ -151,10 +162,15 @@ class DataProcessor():
         #imstack = np.hstack((image, mobilenet_v2.preprocess_input(image)))
         #cv2_imshow(imstack)
         n_im = mobilenet_v2.preprocess_input(image)
+      elif self.model == "VGG":
+        #imstack = np.hstack((image, vgg16.preprocess_input(image)))
+        #cv2_imshow(imstack)
+        n_im = vgg16.preprocess_input(image)
       else:
-        sys.exit("Incert valid network model. Options: Mobile or ResNet (case sensitive)")
+        sys.exit("Incert valid network model. Options: Mobile, ResNet or VGG (case sensitive)")
 
-    else:   # values normalised between 0 and 1
+    else:
+      # values normalised between 0 and 1
       n_im = image/np.max(image)
 
     if self.plot_extensive:
@@ -251,8 +267,9 @@ class DataProcessor():
     '''Takes an input image and returns a cropped version of it'''
     height, width = image.shape[:2]
     if height <= self.min_height and width <= self.min_width:
-      return image
+      return image, new_bbox_values
 
+    new_values = None
     if new_bbox_values is None:
       # there is no eye, select random crop with dimensions (MIN_HEIGHT, MIN_WIDTH)
       box_to_crop = self.select_crop(image, eye = False)
@@ -283,7 +300,7 @@ class DataProcessor():
       cv2_imshow(img_cropped)
     assert img_cropped.shape[0] == self.min_height
     assert img_cropped.shape[1] == self.min_width
-    return img_cropped
+    return img_cropped, new_values
 
 
   #######################################  
