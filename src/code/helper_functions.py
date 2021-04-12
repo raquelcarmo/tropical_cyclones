@@ -88,7 +88,7 @@ def compute_class_weights(csv_path, eye_only = False):
     # The sum of the weights of all examples stays the same.
     class_weight = {}
     diff_cats = len(x)
-    print("diff_cats:", diff_cats)
+    #print("diff_cats:", diff_cats)
     cat = 0
     for count in x:
         class_weight[cat] = (1 / count)*(total)/diff_cats
@@ -177,6 +177,15 @@ def prepare_dataset(processor, images, labels, bboxes):
     return ds
 
 
+def percentage_black_pixels(image, threshold = 0.85):
+    h,w = image.shape[:2]
+    use = True
+    percentage = (h*w - cv2.countNonZero(image[:,:,0])) / (h*w)
+    if percentage > threshold:
+        use = False
+    return use
+
+
 def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height, min_width):
     '''Creates a tf.data.Dataset containing images and respective labels.
     Unlike prepare_dataset(), this method allows to randomly crop each image multiple
@@ -184,7 +193,9 @@ def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height,
     assert n_crops > 0
     processed_images_dataset = []
     labels_dataset = []
-
+    cnt = 0
+    threshold = 0.85
+    
     for image_path, label, bbox in zip(images, labels, bboxes):
         # get bbox
         bbox_rotated = None if (bbox == 0).all() else bbox
@@ -193,6 +204,10 @@ def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height,
         im = cv2.imread(image_path).astype(np.float32) # loads images as BGR in float32
         image = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)   # BGR -> RGB
     
+        if not percentage_black_pixels(image, threshold):
+            cnt += 1
+            continue
+        
         # pad images to the dimensions required
         padded_image, bbox_padded = processor.padding(image, bbox_rotated)
         h,w = padded_image.shape[:2]
@@ -215,6 +230,8 @@ def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height,
             processed_images_dataset.append(padded_image)
             labels_dataset.append(label)      
 
+    print("Number of images with a percentage of black pixels higher than {}%: {}".format(threshold*100, cnt))
+    print("Size of data:", len(labels_dataset))
     # create a dataset with the processed images and respective labels
     ds = Dataset.from_tensor_slices((processed_images_dataset, labels_dataset))
     #print(len(list(ds.as_numpy_iterator())))
