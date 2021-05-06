@@ -72,13 +72,13 @@ class DataProcessor():
     sized_image, bbox_sized = self.random_crop(padded_image, bbox_padded)
     
     # [DEPRECATED] perform normalisation to the images 
-    #output_image = self.normalisation(sized_image, mode = "model") if self.normalise else sized_image
+    output_image = self.normalisation(sized_image, mode = "model") if self.normalise else sized_image
     # force land values to be zero
     #output_image[mask == 1] = 0
 
     if self.show_prints:
       print("[END]: preprocess_pipeline")
-    return sized_image, bbox_sized  
+    return output_image, bbox_sized  
 
 
   def padding(self, image, bbox):
