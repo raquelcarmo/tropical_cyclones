@@ -7,7 +7,12 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import concatenate, Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.metrics import CategoricalAccuracy, TopKCategoricalAccuracy, Precision, Recall, TruePositives, FalsePositives, TrueNegatives, FalseNegatives
+from keras import backend as K
 
+
+def RMSE(y_true, y_pred):
+    return K.sqrt(K.mean(K.square(y_pred - y_true))) 
+    
 
 def make_ResNet(IMAGE_DIM_W, IMAGE_DIM_H, LEARNING_RATE, detection = False, eye_only = False):
 
@@ -109,7 +114,11 @@ def make_VGG(IMAGE_DIM_W, IMAGE_DIM_H, LEARNING_RATE, detection = False, eye_onl
   
 
 def make_cnn(NETWORK, IMAGE_DIM_W, IMAGE_DIM_H, LEARNING_RATE, detection = False, eye_only = False, dropout = False, rate = 0):
-
+    #sources:
+    #- https://www.pyimagesearch.com/2018/06/04/keras-multiple-outputs-and-multiple-losses/
+    #- https://stackoverflow.com/questions/43855162/rmse-rmsle-loss-function-in-keras
+    #- https://stackoverflow.com/questions/51705464/keras-tensorflow-combined-loss-function-for-single-output
+    
     if NETWORK == "ResNet":
         base_cnn = ResNet50(weights='imagenet', include_top=False, input_shape=(IMAGE_DIM_W, IMAGE_DIM_H, 3))
     elif NETWORK == "Mobile":
@@ -139,10 +148,12 @@ def make_cnn(NETWORK, IMAGE_DIM_W, IMAGE_DIM_H, LEARNING_RATE, detection = False
         classes = 6 if not eye_only else 5
         z = Dense(classes, activation="softmax")(x)
         model = tf.keras.Model(inputs = base_cnn.input, outputs = z)
-
+        #print("RMSE ON!")
         # compile model
-        model.compile(optimizer = Adam(learning_rate = LEARNING_RATE), 
+        model.compile(optimizer = Adam(learning_rate = LEARNING_RATE),
                     loss = "categorical_crossentropy",
+                    #loss = [RMSE, "categorical_crossentropy"],
+                    #loss_weights = [1, 1],
                     metrics = [CategoricalAccuracy(name="accuracy"), TopKCategoricalAccuracy(k=2, name="top2_accuracy"),
                               Precision(name="precision"), Recall(name="recall"), 
                               TruePositives(name='tp'), FalsePositives(name='fp'),
