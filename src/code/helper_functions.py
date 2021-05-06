@@ -88,23 +88,17 @@ def compute_class_weights(csv_path, eye_only = False):
     # The sum of the weights of all examples stays the same.
     class_weight = {}
     diff_cats = len(x)
-    #print("diff_cats:", diff_cats)
+    
+    # Precision values obtained in previous run
+    #precisions = [0.793, 0.2, 0.36, 0.493, 0.6]
+    #precisions = [0.851, 0.08, 0.4, 0.46, 0.5]
+
     cat = 0
     for count in x:
-        class_weight[cat] = (1 / count)*(total)/diff_cats
+        class_weight[cat] = total/(count * diff_cats)
+        #class_weight[cat] = total/(count * diff_cats * precisions[cat])
         cat += 1
-    #weight_for_0 = (1 / cat0)*(total)/6.0 
-    #weight_for_1 = (1 / cat1)*(total)/6.0
-    #weight_for_2 = (1 / cat2)*(total)/6.0 
-    #weight_for_3 = (1 / cat3)*(total)/6.0
-    #weight_for_4 = (1 / cat4)*(total)/6.0 
-    #weight_for_5 = (1 / cat5)*(total)/6.0
 
-    #print('Weights for class 0: {:.2f}, class 1: {:.2f}, class 2: {:.2f}, class 3: {:.2f}, class 4: {:.2f}, class 5: {:.2f}'.format(
-    #    weight_for_0, weight_for_1, weight_for_2, weight_for_3, weight_for_4, weight_for_5)) 
-  
-    #class_weight = {0: weight_for_0, 1: weight_for_1, 2: weight_for_2, 
-    #                3: weight_for_3, 4: weight_for_4, 5: weight_for_5}
     print("class_weights:", class_weight)
     return class_weight
 
@@ -130,6 +124,14 @@ def horizontal_flip(image, label):
 def rot90(image, label):
     image = tf.image.rot90(image, k=1)
     return image, label
+    
+def rot180(image, label):
+    image = tf.image.rot90(image, k=2)
+    return image, label
+    
+def rot270(image, label):
+    image = tf.image.rot90(image, k=3)
+    return image, label
 
 
 def configure_for_performance(ds, BUFFER_SIZE, BATCH_SIZE, shuffle = False, augment = False, squared_input = False):
@@ -145,8 +147,10 @@ def configure_for_performance(ds, BUFFER_SIZE, BATCH_SIZE, shuffle = False, augm
         hor_ds = ds.map(horizontal_flip, num_parallel_calls = AUTOTUNE)
         
         if squared_input:
-          rot_ds = ds.map(rot90, num_parallel_calls = AUTOTUNE)
-          ds = ds.concatenate(vert_ds).concatenate(hor_ds).concatenate(rot_ds)
+          rot90_ds = ds.map(rot90, num_parallel_calls = AUTOTUNE)
+          rot180_ds = ds.map(rot180, num_parallel_calls = AUTOTUNE)
+          rot270_ds = ds.map(rot270, num_parallel_calls = AUTOTUNE)
+          ds = ds.concatenate(vert_ds).concatenate(hor_ds).concatenate(rot90_ds).concatenate(rot180_ds).concatenate(rot270_ds)
         else:
           #aug_ds = ds.map(data_augmentation, num_parallel_calls = AUTOTUNE)
           ds = ds.concatenate(vert_ds).concatenate(hor_ds)
@@ -388,7 +392,8 @@ def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, dropo
         jet_heatmap = keras.preprocessing.image.array_to_img(jet_heatmap)
         jet_heatmap = jet_heatmap.resize((orig_image.shape[1], orig_image.shape[0]))
         jet_heatmap = keras.preprocessing.image.img_to_array(jet_heatmap)
-
+        jet_heatmap_img = keras.preprocessing.image.array_to_img(jet_heatmap)
+        
         # Superimpose the heatmap on original image
         vv_channel = np.uint8(np.dstack((orig_image[:,:,0], orig_image[:,:,0], orig_image[:,:,0])))
         vh_channel = np.uint8(np.dstack((orig_image[:,:,1], orig_image[:,:,1], orig_image[:,:,1])))
@@ -405,7 +410,7 @@ def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, dropo
         ax1.set_title("Original Image (VV) - label: {}".format(label), fontsize = font_size)
         ax2.imshow(vh_channel)  # plot vh channel
         ax2.set_title("Original Image (VH)", fontsize = font_size)
-        heat_plot = ax3.imshow(jet_heatmap, cmap='jet')
+        heat_plot = ax3.imshow(jet_heatmap_img, cmap='jet')
         ax3.set_title("Heatmap - prediction: {}".format(prediction), fontsize = font_size)
         divider = make_axes_locatable(ax3)
         cax = divider.append_axes("right", size="5%", pad=0.1)
