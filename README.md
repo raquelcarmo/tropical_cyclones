@@ -1,4 +1,4 @@
-# tropical_cyclones
+# Detection and Categorisation of Tropical Cyclones
 This repository holds the code developed within the scope of the Tropical Cyclones project at the Phi-lab, ESRIN/ESA.
 
 It is organised as follows:
