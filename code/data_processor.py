@@ -78,7 +78,7 @@ class DataProcessor():
 
     if self.show_prints:
       print("[END]: preprocess_pipeline")
-    return output_image, bbox_sized  
+    return output_image, bbox_sized
 
 
   def padding(self, image, bbox):
