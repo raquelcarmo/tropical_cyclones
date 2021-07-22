@@ -4,7 +4,7 @@ pandas
 scipy
 matplotlib
 pickle
-cv2
-sklearn
+scikit-learn
 shapely
 seaborn
+opencv-python
