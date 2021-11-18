@@ -1,4 +1,6 @@
 # Tropical Cyclones
+![workflow](tc_workflow.png)
+
 ## Overview
 This repository holds an application of computer vision to the detection and categorization of Tropical Cyclones (TC) using Sentinel-1 Synthetic Aperture Radar data. This project is the result of a joint research collaboration between the Φ-lab (ESRIN/ESA) and Ifremer. 
 
