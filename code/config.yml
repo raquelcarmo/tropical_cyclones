@@ -1,0 +1,54 @@
+data:
+    data_path: /content/drive/MyDrive/ESRIN_PhiLab/Tropical_Cyclones/data
+    features: ['VV','VH','WS']      # SAR features to stack along the 3rd-axis, choices=['VV','VH','WS','sWSO','cWSO']
+    labels_path: "/content/drive/MyDrive/ESRIN_PhiLab/Tropical_Cyclones/data/labels/via_project_11Jan2021_12h22m_csv.csv"
+    with_landMask: True
+    dilate_landMask: True
+
+detection:
+    data_path: /content/drive/MyDrive/ESRIN_PhiLab/Tropical_Cyclones/data
+    results_path: /id_results/R_416x416_nM_bs8_bf100_e30_lr0001_sp5
+    cnn: ResNet
+    loss: binary_crossentropy
+    height: 416
+    width: 416
+    numerical_vars: False
+    normalise: True
+    norm_mode: model    # choices=['z-norm', 'model', 'simple', 'none']
+    rotate: False
+    crop: True
+    crop_mode: uniform  # choices=['uniform', 'weighted']
+    nb_crops: 1
+    batch_size: 8
+    buffer_size: 100
+    epochs: 30
+    learning_rate: 0.0001
+    nb_splits: 5
+
+categorization:
+    data_path: /content/drive/MyDrive/ESRIN_PhiLab/Tropical_Cyclones/data
+    results_path: /cat_results/R_416x416_nM_cU1_bs8_bf100_e30_lr0001_sp5_dr0.5
+    cnn: ResNet
+    loss: categorical_crossentropy      # or [RMSE, "categorical_crossentropy"]
+    height: 416
+    width: 416
+    eye_only: True
+    numerical_vars: False
+    normalise: True
+    norm_mode: model    # choices=['z-norm', 'model', 'simple', 'none']
+    rotate: False
+    crop: True
+    crop_mode: uniform  # choices=['uniform', 'weighted']
+    nb_crops: 1
+    data_aug: False
+    batch_size: 8
+    buffer_size: 100
+    epochs: 30
+    learning_rate: 0.0001
+    nb_splits: 5
+    dropout: True
+    drop_rate: 0.5
+    finetune: False
+    finetune_at: -5
+    initial_epochs: 20
+    finetune_epochs: 10

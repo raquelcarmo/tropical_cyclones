@@ -10,7 +10,7 @@ The code developed was used for the following publication to [IGARSS 2021](https
 This repository is intended as a means to reproduce the results shown in the paper and to stimulate further research in this direction.
 
 ## Installation
-To install requirements: `pip install -r requirements.txt`
+To install requirements: `python -m pip install -r requirements.txt`
 
 ## Contents
 This repository contains the following:
