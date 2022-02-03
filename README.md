@@ -28,22 +28,22 @@ python code/data_download.py
 The directory to store the images should be configured in the `data_path` variable from the configuration file `config.yml`. 
 
 #### Extraction from API
-Initially, **.nc** products will be downloaded from the CyclObs API and stored in a folder called `SAR_swath_nc`, which will contain the files stratified by category, i.e. distributed over 5 different folders named `categoryX`, where 'X' represents each of the categories from 1 to 5.
+Initially, **.nc** products will be downloaded from the CyclObs API and stored in a folder called `nc`, which will contain the files stratified by category, i.e. distributed over 5 different folders named `categoryX`, where 'X' represents each of the categories from 1 to 5.
 
 #### Convertion from .nc to .png
-In this stage, and depending on the SAR features selected (max. 3, one for each channel of the resulting image), each feature will be extracted from each .nc product and stacked along the 3rd-axis to create an image (stored as .png). For this, a new folder will be created with the prefix `SAR_images_swath_`, followed by the features' siglas. Inside this folder, 6 additional folders will be created:
+In this stage, and depending on the SAR features selected (max. 3, one for each channel of the resulting image), each feature will be extracted from each .nc product and stacked along the 3rd-axis to create an image (stored as .png). For this, a new folder will be created with the features' siglas (e.g. 'VV_VH_WS'). Inside this folder, 6 additional folders will be created:
   - a `csv` folder containing files (csv) with the full dataset and respective labels;
   - 5 folders named `categoryX`, where 'X' represents each of the categories 1 to 5, containing the images of all TCs from that category.
 
 ## Usage
 #### Detection
-Performing the detection of Tropical Cyclones requires a configuration file defining the model parameters, training procedure and logging parameters, which can be found in `config.yml`. Training is run via the script `detection.py` as follows
+Performing the detection of Tropical Cyclones requires a configuration file defining the model parameters, training procedure and logging parameters, which can be found in `config.yml`. Training is run via the script `detect.py` as follows
 ```python
-python code/detection.py
+python code/detect.py
 ```
 This will create the directory specified as `results_path` in the configuration file `config.yml`, containing the scores, saved models and logs.
 #### Categorization
-Performing the categorization involves similar steps as the detection task, except the script name, which is called `categorization.py` and is used as follows
+Performing the categorization involves similar steps as the detection task, except the script name, which is called `categorize.py` and is used as follows
 ```python
-python code/categorization.py
+python code/categorize.py
 ```
