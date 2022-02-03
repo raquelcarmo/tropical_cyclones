@@ -6,7 +6,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from google.colab.patches import cv2_imshow
 
 import tensorflow as tf
 from tensorflow import keras
@@ -20,9 +19,9 @@ from tensorflow.keras import layers
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
-def load_data(csv_path = "", df = None, with_cat = True, eye_only = False):
+def load_data(args, csv_path="", df=None):
     # read csv file
-    df = df if (csv_path == "") else pd.read_csv(csv_path, converters={'bbox_shape': eval}).dropna()
+    df = df if (csv_path=="") else pd.read_csv(csv_path, converters={'bbox_shape': eval}).dropna()
   
     # function to convert empty box to np.zeros(4)
     zero_pad = lambda y: np.zeros(4, dtype=int) if y==[] else y
@@ -33,10 +32,9 @@ def load_data(csv_path = "", df = None, with_cat = True, eye_only = False):
     # convert from str to int
     boxes = [np.array(list(map(int, bbox))) for bbox in bbox_column]
 
-    if not with_cat: # labels = {0,1}
+    if 'eye_only' not in args.keys(): # detection: labels = [0,1]
         labels = df["label"]
-    
-    else: # labels = {0,1,2,3,4,5} or {0,1,2,3,4}
+    else: # categorization: labels = [0,1,2,3,4,5] or [0,1,2,3,4]
         labels = np.zeros(len(images), dtype=int)
         cnt = 0
         for index, row in df.iterrows():
@@ -45,7 +43,7 @@ def load_data(csv_path = "", df = None, with_cat = True, eye_only = False):
                 labels[cnt] = int(cat[-1])
             cnt += 1
     
-        if eye_only:  # labels = {0,1,2,3,4}
+        if args['eye_only']:  # labels = [0,1,2,3,4]
             idx = np.where(labels == 0)[0]
             labels = np.delete(labels, idx)
             labels -= 1
@@ -59,48 +57,59 @@ def load_data(csv_path = "", df = None, with_cat = True, eye_only = False):
     return images, labels, boxes
 
 
-def compute_class_weights(csv_path, eye_only = False):
+def compute_class_weights(csv_path, args):
     # source: https://www.tensorflow.org/tutorials/structured_data/imbalanced_data#class_weights
-  
     # read csv file
     df = pd.read_csv(csv_path, converters={'bbox_shape': eval}).dropna()
+    #print("Dataset dimension: {}".format(len(df)))
+
+    # extract non-categorical labels for StratifiedKFold
     labels = np.zeros(len(df), dtype=int)
     for index, row in df.iterrows():
         if df["label"][index] != 0:
             cat = df["image"][index].split('/')[1]
             labels[index] = int(cat[-1])
 
-    if eye_only:  # labels = {0,1,2,3,4}
+    if args['eye_only']:  # labels = [0,1,2,3,4]
+        assert isinstance(labels, np.ndarray)
         idx = np.where(labels == 0)[0]
         labels = np.delete(labels, idx)
         labels -= 1
+        df.drop(idx, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        #print("New dimensions, Y: {} and df: {}".format(len(labels), len(df)))
     
     # plot histograms of labels
     hist = pd.DataFrame({csv_path: labels}).hist()
     plt.show()
     #plt.savefig("{}/class_distribution.jpg".format(os.path.dirname(csv_path)), bbox_inches='tight')
-
-    x = np.bincount(labels)
-    #cat0, cat1, cat2, cat3, cat4, cat5 = np.bincount(labels)
-    total = len(labels)
-
-    # Scaling by total/6 helps keep the loss to a similar magnitude.
-    # The sum of the weights of all examples stays the same.
-    class_weight = {}
-    diff_cats = len(x)
     
-    # Precision values obtained in previous run
-    #precisions = [0.793, 0.2, 0.36, 0.493, 0.6]
-    #precisions = [0.851, 0.08, 0.4, 0.46, 0.5]
+    # compute class weights
+    if args['crop_mode'] != "weighted": 
+        # if crop_mode == weighted (proporional to presence of classes),
+        # the method compute_class_weights() will no longer represent 
+        # the true distribution of classes in the dataset
+        x = np.bincount(labels)
+        total = len(labels)
 
-    cat = 0
-    for count in x:
-        class_weight[cat] = total/(count * diff_cats)
-        #class_weight[cat] = total/(count * diff_cats * precisions[cat])
-        cat += 1
+        # Scaling by total/6 helps keep the loss to a similar magnitude;
+        # The sum of the weights of all examples stays the same
+        class_weight = {}
+        diff_cats = len(x)
+        
+        # Precision values obtained in previous run
+        #precisions = [0.793, 0.2, 0.36, 0.493, 0.6]
+        #precisions = [0.851, 0.08, 0.4, 0.46, 0.5]
 
+        cat = 0
+        for count in x:
+            class_weight[cat] = total/(count * diff_cats)
+            #class_weight[cat] = total/(count * diff_cats * precisions[cat])
+            cat += 1
+    else:
+        class_weight = None
     print("class_weights:", class_weight)
-    return class_weight
+    return labels, df, class_weight
 
 
 def get_model_name(k):
@@ -113,64 +122,73 @@ def data_augmentation(image, label):
     image = tf.image.flip_up_down(image)
     return image, label
 
+
 def vertical_flip(image, label):
     image = tf.image.flip_up_down(image)
     return image, label
+
 
 def horizontal_flip(image, label):
     image = tf.image.flip_left_right(image)
     return image, label
 
+
 def rot90(image, label):
     image = tf.image.rot90(image, k=1)
     return image, label
     
+
 def rot180(image, label):
     image = tf.image.rot90(image, k=2)
     return image, label
     
+
 def rot270(image, label):
     image = tf.image.rot90(image, k=3)
     return image, label
 
 
-def configure_for_performance(ds, BUFFER_SIZE, BATCH_SIZE, shuffle = False, augment = False, squared_input = False):
+def config_performance(ds, args, shuffle=False, flag=False):
     '''Configures the input dataset to enhance training performance'''
     ds = ds.cache()
   
     if shuffle:
-        ds = ds.shuffle(buffer_size = BUFFER_SIZE)
+        ds = ds.shuffle(buffer_size=args['buffer_size'])
     
-    # use data augmentation only on the training set
-    if augment:   
-        vert_ds = ds.map(vertical_flip, num_parallel_calls = AUTOTUNE)
-        hor_ds = ds.map(horizontal_flip, num_parallel_calls = AUTOTUNE)
+    # use data augmentation only on the training set (where flag==False)
+    if not flag and 'data_aug' in args.keys() and args['data_aug']:   
+        vert_ds = ds.map(vertical_flip, num_parallel_calls=AUTOTUNE)
+        hor_ds = ds.map(horizontal_flip, num_parallel_calls=AUTOTUNE)
         
-        if squared_input:
-          rot90_ds = ds.map(rot90, num_parallel_calls = AUTOTUNE)
-          rot180_ds = ds.map(rot180, num_parallel_calls = AUTOTUNE)
-          rot270_ds = ds.map(rot270, num_parallel_calls = AUTOTUNE)
-          ds = ds.concatenate(vert_ds).concatenate(hor_ds).concatenate(rot90_ds).concatenate(rot180_ds).concatenate(rot270_ds)
+        if args['height'] == args['width']:
+            rot90_ds = ds.map(rot90, num_parallel_calls=AUTOTUNE)
+            rot180_ds = ds.map(rot180, num_parallel_calls=AUTOTUNE)
+            rot270_ds = ds.map(rot270, num_parallel_calls=AUTOTUNE)
+            ds = ds.concatenate(vert_ds)\
+                    .concatenate(hor_ds)\
+                        .concatenate(rot90_ds)\
+                            .concatenate(rot180_ds)\
+                                .concatenate(rot270_ds)
         else:
-          #aug_ds = ds.map(data_augmentation, num_parallel_calls = AUTOTUNE)
+          #aug_ds = ds.map(data_augmentation, num_parallel_calls=AUTOTUNE)
           ds = ds.concatenate(vert_ds).concatenate(hor_ds)
 
     # batch all datasets
-    ds = ds.batch(batch_size = BATCH_SIZE)
+    ds = ds.batch(batch_size=args['batch_size'])
     # use buffered prefecting on all datasets
-    ds = ds.prefetch(buffer_size = AUTOTUNE)
+    ds = ds.prefetch(buffer_size=AUTOTUNE)
     return ds
 
 
-def prepare_dataset(processor, images, labels, bboxes):
-    ''' [DEPRECATED] Creates a tf.data.Dataset containing images and respective labels'''
+def prepare_dataset(p, images, labels, bboxes):
+    '''[DEPRECATED] Creates a tf.data.Dataset containing images and respective labels'''
     images_dataset = Dataset.from_tensor_slices((images, bboxes))
     labels_dataset = Dataset.from_tensor_slices(labels)
     #print(images_dataset.element_spec)
 
     # transformation that applies the preprocessing pipeline to each element (image, bbox)
     processed_images_dataset = images_dataset.map(
-        lambda x, y: tf.py_function(func = processor.preprocess_pipeline, inp=[x, y], Tout=[tf.float32, tf.float32]),
+        lambda x, y: tf.py_function(func = p.preprocess_pipeline, inp=[x, y], Tout=[tf.float32, tf.float32]),
         num_parallel_calls = AUTOTUNE).map(
             # returns a dataset with only the processed images
             lambda x, y: x)
@@ -182,7 +200,7 @@ def prepare_dataset(processor, images, labels, bboxes):
 
 
 def percentage_black_pixels(image, threshold = 0.85):
-    h,w = image.shape[:2]
+    h, w = image.shape[:2]
     use = True
     percentage = (h*w - cv2.countNonZero(image[:,:,0])) / (h*w)
     if percentage > threshold:
@@ -190,13 +208,12 @@ def percentage_black_pixels(image, threshold = 0.85):
     return use
 
 
-def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height, min_width):
+def create_dataset(p, images, labels, bboxes, args, flag=False):
     '''Creates a tf.data.Dataset containing images and respective labels.
     Unlike prepare_dataset(), this method allows to randomly crop each image multiple
     (n_crops) times as a way to augment the dataset'''
     assert n_crops > 0
-    processed_images_dataset = []
-    labels_dataset = []
+    processed_images_dataset, labels_dataset = [], []
     cnt = 0
     threshold = 0.85
     
@@ -213,20 +230,26 @@ def create_dataset(processor, images, labels, bboxes, n_crops, mode, min_height,
             continue
         
         # pad images to the dimensions required
-        padded_image, bbox_padded = processor.padding(image, bbox_rotated)
-        h,w = padded_image.shape[:2]
+        padded_image, bbox_padded = p.padding(image, bbox_rotated)
+        h, w = padded_image.shape[:2]
         #print("Padded:")
-        #cv2_imshow(padded_image)
-        
-        if h > min_height or w > min_width:
+        #cv2.imshow(padded_image)
+    
+        if h > args['height'] or w > args['width']:
             #print('Cropped:')
-            if mode == "uniform":
-                # randomly crop each image (n_crops) times to augment the dataset
-                for _ in range(n_crops):
-                    sized_image,_ = processor.random_crop(padded_image, bbox_padded)
+            if args['crop_mode'] == "uniform":
+                if not flag:
+                    # randomly crop each image (n_crops) times to augment the train dataset
+                    for _ in range(args['nb_crops']):
+                        sized_image,_ = p.random_crop(padded_image, bbox_padded)
+                        processed_images_dataset.append(sized_image)
+                        labels_dataset.append(label)
+                        #cv2.imshow(sized_image)
+                else:
+                    # only crop once (test/val datasets)
+                    sized_image,_ = p.random_crop(padded_image, bbox_padded)
                     processed_images_dataset.append(sized_image)
                     labels_dataset.append(label)
-                    #cv2_imshow(sized_image)
               
             #else: 
             # TO DO: implement weighted crop mode
@@ -254,9 +277,12 @@ def get_stats(train_ds, val_ds):
     return mean, std
 
 
-def normalisation(train_ds, val_ds, mode = "", model = ""):
-    if mode == "model":
-        def model_norm(image, label, model = model):
+def normalisation(train_ds, val_ds, args):
+    if not args['normalise']:
+        return train_ds, val_ds
+
+    if args['norm_mode'] == "model":
+        def model_norm(image, label, model=args['cnn']):
             if model == "ResNet":
                 new = resnet50.preprocess_input(image)
             elif model == "Mobile":
@@ -266,10 +292,10 @@ def normalisation(train_ds, val_ds, mode = "", model = ""):
             return new, label
         func = model_norm
         
-    elif mode == "z-norm":
+    elif args['norm_mode'] == "z-norm":
         mean, std = get_stats(train_ds, val_ds)
 
-        def z_norm(image, label, mean = mean, std = std):
+        def z_norm(image, label, mean=mean, std=std):
             #new = (image - mean) / std
             
             zero = tf.constant(0, dtype = tf.float32)
@@ -277,7 +303,6 @@ def normalisation(train_ds, val_ds, mode = "", model = ""):
             img = tf.where(tf.equal(image, zero), nan, image)
             aux = (img - mean)/std
             new = tf.where(tf.math.is_nan(aux), tf.zeros_like(aux), aux)
-            
             return new, label
         func = z_norm
     
@@ -287,14 +312,14 @@ def normalisation(train_ds, val_ds, mode = "", model = ""):
             return new, label
         func = simple_norm
     
-    train_norm_ds = train_ds.map(func, num_parallel_calls = AUTOTUNE)
-    val_norm_ds = val_ds.map(func, num_parallel_calls = AUTOTUNE)
+    train_norm_ds = train_ds.map(func, num_parallel_calls=AUTOTUNE)
+    val_norm_ds = val_ds.map(func, num_parallel_calls=AUTOTUNE)
     return train_norm_ds, val_norm_ds
     
     
-def make_gradcam_heatmap(img_array, model, dropout = False, fine_tuning = False, network = ""):
-    if fine_tuning:
-        if network == "ResNet":
+def make_gradcam_heatmap(img_array, model, args):
+    if args['finetune']:
+        if args['cnn'] == "ResNet":
             last_conv_layer_name = model.get_layer('resnet50').layers[-1].name
             last_conv_layer = model.get_layer('resnet50').get_layer(last_conv_layer_name)
             inputs = model.get_layer('resnet50').inputs
@@ -304,11 +329,12 @@ def make_gradcam_heatmap(img_array, model, dropout = False, fine_tuning = False,
             last_conv_layer = model.get_layer('mobilenetv2_1.00_224').get_layer(last_conv_layer_name)
             inputs = model.get_layer('mobilenetv2_1.00_224').inputs
     else:
-        last_conv_layer_name = model.layers[-4].name if dropout else model.layers[-3].name
+        last_conv_layer_name = model.layers[-4].name if args['dropout'] else model.layers[-3].name
         last_conv_layer = model.get_layer(last_conv_layer_name)
         inputs = model.inputs
-    classifier_layer_names = [layer.name for layer in model.layers[-3:]] if dropout else [layer.name for layer in model.layers[-2:]]
-    
+
+    classifier_layer_names = [layer.name for layer in model.layers[-3:]] \
+        if args['dropout'] else [layer.name for layer in model.layers[-2:]]
     #print(last_conv_layer_name)
     #print(classifier_layer_names)
     #print(inputs)
@@ -357,15 +383,15 @@ def make_gradcam_heatmap(img_array, model, dropout = False, fine_tuning = False,
     return heatmap
 
 
-def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, dropout = False, fine_tuning = False, network = ""):
-    cnt = 0
-
+def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, args):
     val_norm_images = val_norm_dataset.map(lambda x, y: x)
     val_norm_labels = val_norm_dataset.map(lambda x, y: y)
     val_images = val_dataset.map(lambda x, y: x)
     val_labels = val_dataset.map(lambda x, y: y)
 
-    for orig_image, label, processed_image, processed_label, prediction in zip(val_images, val_labels, val_norm_images, val_norm_labels, predictions):
+    cnt = 0
+    for orig_image, label, processed_image, processed_label, prediction in \
+        zip(val_images, val_labels, val_norm_images, val_norm_labels, predictions):
         # label and processed_label should be the same
         #assert (label == processed_label).all()
         
@@ -374,9 +400,10 @@ def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, dropo
         #processed_image = tf.transpose(processed_image, [1,0,2])
         
         #pred = model.predict(processed_image)
-        prediction = np.round(prediction,2) #if categorization else pred[0]
+        prediction = np.round(prediction, 2) #if categorization else pred[0]
 
-        heatmap = make_gradcam_heatmap(processed_image, model, dropout, fine_tuning, network)
+        # compute heatmap
+        heatmap = make_gradcam_heatmap(processed_image, model, args)
 
         # Rescale heatmap to a range 0-255
         heatmap = np.uint8(255 * heatmap)
@@ -423,5 +450,4 @@ def grad_cam(model, val_dataset, val_norm_dataset, predictions, save_path, dropo
         fig.savefig("{}/heatmap_{}.jpg".format(save_path, cnt), bbox_inches='tight')
         plt.close(fig)
         cnt += 1
-
     return
