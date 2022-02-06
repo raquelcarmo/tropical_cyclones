@@ -269,6 +269,9 @@ def createCSV(args, images_dir):
 
     if (df_full['lat'].values == None).all() and (df_full['lon'].values == None).all():
         #print("Warning: lat and lon variables not considered.")
+        df_train.drop(columns=['lat', 'lon'], inplace=True)
+        df_val.drop(columns=['lat', 'lon'], inplace=True)
+        df_test.drop(columns=['lat', 'lon'], inplace=True)
         df_full.drop(columns=['lat', 'lon'], inplace=True)
 
     # create path to save the csv files
