@@ -9,7 +9,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import math
-from google.colab.patches import cv2_imshow
+# from google.colab.patches import cv2_imshow
 from shapely.geometry import Point
 import tensorflow as tf
 from tensorflow.keras.applications import resnet50, mobilenet_v2, vgg16
@@ -51,7 +51,7 @@ class DataProcessor():
 
         if self.plot_extensive:
             print("Before:", image.shape)
-            cv2_imshow(image)
+            plt.imshow(image)
 
         if self.rotate:
             # perform rotation to the images
@@ -99,7 +99,7 @@ class DataProcessor():
 
         if self.plot_extensive:
             print("After padding:", padded_img.shape)
-            cv2_imshow(padded_img)
+            plt.imshow(padded_img)
         return padded_img, new_values
 
 
@@ -183,7 +183,7 @@ class DataProcessor():
 
         if self.plot_extensive:
             print("After rotating:", warped.shape)
-            cv2_imshow(warped)
+            plt.imshow(warped)
         return warped, new_values
 
 
@@ -221,7 +221,7 @@ class DataProcessor():
 
         if self.plot_extensive:
             print("After cropping:", img_cropped.shape)
-            cv2_imshow(img_cropped)
+            plt.imshow(img_cropped)
         assert img_cropped.shape[0] == self.min_height
         assert img_cropped.shape[1] == self.min_width
         return img_cropped, new_values
