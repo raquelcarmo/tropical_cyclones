@@ -97,7 +97,7 @@ def extractFeature(infoImage, feat, mask=None, mask_dilated=None):
         # mask out the land values
         if mask_dilated is None:
             feature[0][mask[0] != 0] = 0
-            feature[0][mask[0] == 1] = 1
+            #feature[0][mask[0] == 1] = 1
         else:
             feature[0][mask_dilated != 0] = 0
     feature = (feature[0] - np.min(feature[0]))/(np.max(feature[0]) - np.min(feature[0]))
@@ -131,6 +131,8 @@ def nc2image(nc_path, folderName, args):
                         mask[mask != 0] = 1
                         kernel = np.ones((11, 11), np.int8)
                         mask_dilated = cv2.dilate(mask[0], kernel, iterations=1)
+                    else:
+                        mask_dilated = None
 
                 # Co-polarization (VV)
                 feature_co = extractFeature(infoImage, "nrcs_detrend_co", mask, mask_dilated)
