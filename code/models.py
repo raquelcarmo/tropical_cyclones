@@ -1,3 +1,7 @@
+import os
+import sys
+import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import Input
 from tensorflow.keras.applications.vgg16 import VGG16
@@ -6,6 +10,7 @@ from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import concatenate, Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, TensorBoard
 from tensorflow.keras.metrics import BinaryAccuracy, CategoricalAccuracy, TopKCategoricalAccuracy, Precision, \
     Recall, TruePositives, FalsePositives, TrueNegatives, FalseNegatives
 from keras import backend as K
@@ -32,10 +37,15 @@ class DetectionCNN:
         self.batch_size = args['batch_size']
         self.loss = args['loss']
         self.optimizer = Adam(learning_rate=args['learning_rate'])
-        self.eval_metrics = [BinaryAccuracy(name="accuracy"), Precision(name="precision"),
-                             Recall(name="recall"), TruePositives(name='tp'), 
-                             FalsePositives(name='fp'), TrueNegatives(name='tn'),
-                             FalseNegatives(name='fn')]
+        self.eval_metrics = [
+            BinaryAccuracy(name="accuracy"),
+            Precision(name="precision"),
+            Recall(name="recall"),
+            TruePositives(name='tp'),
+            FalsePositives(name='fp'),
+            TrueNegatives(name='tn'),
+            FalseNegatives(name='fn')
+            ]
         self.vAcc, self.vLoss, self.vTP, self.vFP, self.vTN, \
             self.vFN, self.vPrec, self.vRec = ([] for _ in range(8))
 
@@ -59,18 +69,22 @@ class DetectionCNN:
         z = Dense(1, activation="sigmoid")(x)
 
         model = Model(inputs=base_cnn.input, outputs=z)
-        model.compile(optimizer = self.optimizer, 
-                      loss = self.loss, 
-                      metrics = self.eval_metrics)
+        model.compile(
+            optimizer = self.optimizer,
+            loss = self.loss,
+            metrics = self.eval_metrics
+            )
         return model
 
 
     def train(self, train_dataset, val_dataset, fold_var):
+        print(f"Start training for {utils.get_model_name(fold_var)}")
         dt = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=10, verbose=1, restore_best_weights=False),
+            EarlyStopping(monitor='val_loss', patience=10, verbose=1, mode='min'),
             ReduceLROnPlateau(factor=0.1, patience=5, min_lr=0.00001, verbose=1),
-            ModelCheckpoint(os.path.join(self.save_dir, utils.get_model_name(fold_var)), verbose=1, save_best_only=True),
+            ModelCheckpoint(os.path.join(self.save_dir, utils.get_model_name(fold_var)), verbose=1, 
+                            save_best_only=True, save_weights_only=True),
             TensorBoard(log_dir=os.path.join(self.save_dir, "logs", dt))
         ]
 
@@ -128,7 +142,9 @@ class DetectionCNN:
                 pickle.dump(metrics[m], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-    def __reset(self):
+    def reset(self):
+        tf.keras.backend.clear_session()
+        del self.model
         self.model = self.__build()
 
 
@@ -147,10 +163,16 @@ class CategorizationCNN:
         self.dropout = args['dropout']
         self.drop_rate = args['drop_rate']
         self.optimizer = Adam(learning_rate=args['learning_rate'])
-        self.eval_metrics = [CategoricalAccuracy(name="accuracy"), TopKCategoricalAccuracy(k=2, name="top2_accuracy"), 
-                             Precision(name="precision"), Recall(name="recall"), 
-                             TruePositives(name='tp'), FalsePositives(name='fp'),
-                             TrueNegatives(name='tn'), FalseNegatives(name='fn')]
+        self.eval_metrics = [
+            CategoricalAccuracy(name="accuracy"),
+            TopKCategoricalAccuracy(k=2, name="top2_accuracy"),
+            Precision(name="precision"),
+            Recall(name="recall"),
+            TruePositives(name='tp'),
+            FalsePositives(name='fp'),
+            TrueNegatives(name='tn'),
+            FalseNegatives(name='fn')
+            ]
         self.vAcc, self.vTop2Acc, self.vLoss, self.vTP, self.vFP, self.vTN, \
             self.vFN, self.vPrec, self.vRec = ([] for _ in range(9))
 
@@ -186,21 +208,24 @@ class CategorizationCNN:
         z = Dense(classes, activation="softmax")(x)
 
         model = Model(inputs=base_cnn.input, outputs=z)
-        model.compile(optimizer = self.optimizer, 
-                      loss = self.loss,
-                      # weight the loss contributions of different model outputs as 1:1
-                      loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
-                      metrics = self.eval_metrics)
+        model.compile(
+            optimizer = self.optimizer,
+            loss = self.loss,
+            # weight the loss contributions of different model outputs as 1:1
+            loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
+            metrics = self.eval_metrics
+            )
         return model
 
 
     def train(self, train_dataset, val_dataset, class_weights, fold_var):
         dt = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=15, verbose=1, restore_best_weights=False),
+            EarlyStopping(monitor='val_loss', patience=15, verbose=1, mode='min'),
             ReduceLROnPlateau(factor=0.1, patience=5, min_lr=0.00001, verbose=1),
-            ModelCheckpoint(os.path.join(self.save_dir, utils.get_model_name(fold_var)), verbose=1, save_best_only=True),
-            #TensorBoard(log_dir=os.path.join(self.save_dir, "logs", dt))
+            ModelCheckpoint(os.path.join(self.save_dir, utils.get_model_name(fold_var)), verbose=1,
+                            save_best_only=True, save_weights_only=True),
+            TensorBoard(log_dir=os.path.join(self.save_dir, "logs", dt))
         ]
 
         history = self.model.fit(
@@ -226,22 +251,24 @@ class CategorizationCNN:
 
         inputs = Input(shape=(self.width, self.height, 3))
         x = self.base_cnn(inputs, training=False)
-        x = GlobalAveragePooling2D()(x.output)
+        x = GlobalAveragePooling2D()(x)
         x = Dropout(self.drop_rate)(x) if self.dropout else x
 
         classes = 6 if not self.eye else 5
         z = Dense(classes, activation="softmax")(x)
 
         model = Model(inputs=inputs, outputs=z)
-        model.compile(optimizer = self.optimizer,
-                      loss = self.loss,
-                      # weight the loss contributions of different model outputs as 1:1
-                      loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
-                      metrics = self.eval_metrics)
+        model.compile(
+            optimizer = self.optimizer,
+            loss = self.loss,
+            # weight the loss contributions of different model outputs as 1:1
+            loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
+            metrics = self.eval_metrics
+            )
         return model
 
     
-    def __buildftStage2(self):
+    def buildftStage2(self):
         # unfreeze base model
         self.base_cnn.trainable = True
 
@@ -257,18 +284,21 @@ class CategorizationCNN:
             for layer in self.base_cnn.layers[:total2freeze]:
                 layer.trainable = False
 
-        self.model.compile(optimizer = Adam(learning_rate=1e-5), 
-                           loss = self.loss,
-                           # weight the loss contributions of different model outputs as 1:1
-                           loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
-                           metrics = self.eval_metrics)
+        self.model.compile(
+            optimizer = Adam(learning_rate=1e-5),
+            loss = self.loss,
+            # weight the loss contributions of different model outputs as 1:1
+            loss_weights = np.ones(len(self.loss)).tolist() if len(self.loss) > 1 else None,
+            metrics = self.eval_metrics
+            )
 
 
     def trainftStage1(self, train_dataset, val_dataset, class_weights, fold_var):
         # train 1st stage
         dt = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
         callbacks = [
-            ModelCheckpoint(os.path.join(self.save_dir, f"best_model_frozen_{fold_var}.h5"), verbose=1, save_best_only=True),
+            ModelCheckpoint(os.path.join(self.save_dir, f"best_model_frozen_{fold_var}.h5"), verbose=1,
+                            save_best_only=True, save_weights_only=True),
             #TensorBoard(log_dir=os.path.join(self.save_dir, "logs", dt))
         ]
         
@@ -289,7 +319,8 @@ class CategorizationCNN:
         # train 2nd stage
         dt = datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
         callbacks = [
-            ModelCheckpoint(os.path.join(self.save_dir, f"best_model_finetuned_{fold_var}.h5"), verbose=1, save_best_only=True),
+            ModelCheckpoint(os.path.join(self.save_dir, f"best_model_finetuned_{fold_var}.h5"), verbose=1,
+                            save_best_only=True, save_weights_only=True),
             #TensorBoard(log_dir=os.path.join(self.save_dir, "logs", dt))
         ]
         
@@ -355,7 +386,10 @@ class CategorizationCNN:
                 pickle.dump(val, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-    def __reset(self):
+    def reset(self):
+        tf.keras.backend.clear_session()
+        del self.model
+
         if not self.ft:
             self.model = self.__build()
         else:
