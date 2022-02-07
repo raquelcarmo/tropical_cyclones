@@ -22,12 +22,12 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 def load_data(args, csv_path="", df=None):
     # read csv file
     df = df if (csv_path=="") else pd.read_csv(csv_path, converters={'bbox_shape': eval}).dropna()
-  
+
     # function to convert empty box to np.zeros(4)
     zero_pad = lambda y: np.zeros(4, dtype=int) if y==[] else y
   
     # extract info from df
-    images = df["image"]
+    images = df["image"].values
     bbox_column = list(map(zero_pad, df['bbox_shape']))
     # convert from str to int
     boxes = [np.array(list(map(int, bbox))) for bbox in bbox_column]
@@ -42,7 +42,7 @@ def load_data(args, csv_path="", df=None):
                 cat = df["image"][index].split('/')[1]
                 labels[cnt] = int(cat[-1])
             cnt += 1
-    
+
         if args['eye_only']:  # labels = [0,1,2,3,4]
             idx = np.where(labels == 0)[0]
             labels = np.delete(labels, idx)
@@ -180,11 +180,12 @@ def config_performance(ds, args, shuffle=False, flag=False):
     return ds
 
 
+@tf.autograph.experimental.do_not_convert
 def prepare_dataset(p, images, labels, bboxes):
     '''[DEPRECATED] Creates a tf.data.Dataset containing images and respective labels'''
     images_dataset = Dataset.from_tensor_slices((images, bboxes))
     labels_dataset = Dataset.from_tensor_slices(labels)
-    #print(images_dataset.element_spec)
+    # print(images_dataset.element_spec)
 
     # transformation that applies the preprocessing pipeline to each element (image, bbox)
     processed_images_dataset = images_dataset.map(
@@ -212,7 +213,7 @@ def create_dataset(p, images, labels, bboxes, args, flag=False):
     '''Creates a tf.data.Dataset containing images and respective labels.
     Unlike prepare_dataset(), this method allows to randomly crop each image multiple
     (n_crops) times as a way to augment the dataset'''
-    assert n_crops > 0
+    assert args['nb_crops'] > 0
     processed_images_dataset, labels_dataset = [], []
     cnt = 0
     threshold = 0.85
