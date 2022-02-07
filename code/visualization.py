@@ -4,8 +4,7 @@ import os
 import seaborn as sns
 
 def plot_history(history, fold_var, save_dir):
-
-    fig, (ax1, ax2) = plt.subplots(nrows = 2, ncols = 1, figsize=(10, 10))
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10,10))
     ax1.plot(history.history['accuracy'], label='Training Accuracy')
     ax1.plot(history.history['val_accuracy'], label='Validation Accuracy')
     ax1.grid(True)
@@ -15,23 +14,24 @@ def plot_history(history, fold_var, save_dir):
 
     ax2.plot(history.history["loss"], label='Training Loss')
     ax2.plot(history.history["val_loss"], label='Validation Loss')
-    ax2.plot(np.argmin(history.history["val_loss"]), np.min(history.history["val_loss"]), marker="x", color="r", label = "Best model")
+    ax2.plot(np.argmin(history.history["val_loss"]), np.min(history.history["val_loss"]), 
+            marker="x", color="r", label = "Best model")
     ax2.grid(True)
     ax2.legend(loc='upper right')
     ax2.set(xlabel = 'Epoch', 
         ylabel = 'Cross Entropy',
         title = 'Training and Validation Loss')
     plt.show()
-    fig.savefig(save_dir + "model_" + str(fold_var) + ".jpg", bbox_inches='tight')
+    fig.savefig(f"{save_dir}/model_{fold_var}.jpg", bbox_inches='tight')
 
 
 def plot_history_ft(args, dict, fold_var, save_dir):
-        
-    fig, (ax1, ax2) = plt.subplots(nrows = 2, ncols = 1, figsize=(10, 10))
+    ie = args['initial_epochs']
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10,10))
     ax1.plot(dict['acc'], label='Training Accuracy')
     ax1.plot(dict['validation_acc'], label='Validation Accuracy')
     #plt.ylim([min(plt.ylim()),1])
-    ax1.plot([args.initial_epochs-1, args.initial_epochs-1], plt.ylim(), label='Start Fine Tuning')
+    ax1.plot([ie-1, ie-1], plt.ylim(), label='Start Fine Tuning')
     ax1.grid(True)
     ax1.legend(loc='lower right')
     ax1.set(ylabel = "Accuracy",
@@ -40,15 +40,16 @@ def plot_history_ft(args, dict, fold_var, save_dir):
     ax2.plot(dict['loss'], label='Training Loss')
     ax2.plot(dict['validation_loss'], label='Validation Loss')
     #plt.ylim([0, 1.0])
-    ax2.plot([args.initial_epochs-1, args.initial_epochs-1], plt.ylim(), label='Start Fine Tuning')
-    ax2.plot(np.argmin(dict['validation_loss']), np.min(dict['validation_loss']), marker="x", color="r", label = "Best model")
+    ax2.plot([ie-1, ie-1], plt.ylim(), label='Start Fine Tuning')
+    ax2.plot(np.argmin(dict['validation_loss']), np.min(dict['validation_loss']), 
+            marker="x", color="r", label = "Best model")
     ax2.grid(True)
     ax2.legend(loc='upper right')
     ax2.set(xlabel = 'Epoch',
             ylabel = 'Cross Entropy',
             title = 'Training and Validation Loss')
     plt.show()
-    fig.savefig(save_dir + "model_" + str(fold_var) + ".jpg", bbox_inches='tight')
+    fig.savefig(f"{save_dir}/model_{fold_var}.jpg", bbox_inches='tight')
 
 
 def plot_model_comparisons(nb_models, metrics, dir_dict, mean_dict, inter_dict, sub_dir, title, save_plot):
@@ -78,9 +79,9 @@ def plot_model_comparisons(nb_models, metrics, dir_dict, mean_dict, inter_dict, 
     plt.tight_layout()
     plt.show()
 
-    # SAVE PLOT
+    # save plot
     if save_plot:
-        dir = sub_dir + "model_comparisons/"
+        dir = f"{sub_dir}/model_comparisons"
         os.makedirs(dir, exist_ok=True)
         fig.savefig("{}/{}.jpg".format(dir, title.replace(" ", "_")), bbox_inches='tight')
 
@@ -125,8 +126,8 @@ def plot_frozen_layers(nb_models, metrics, dir_dict, mean_dict, inter_dict, sub_
     plt.tight_layout()
     plt.show()
 
-    # SAVE PLOT
+    # save plot
     if save_plot:
-        dir = sub_dir + "model_comparisons/"
+        dir = f"{sub_dir}/model_comparisons"
         os.makedirs(dir, exist_ok=True)
         fig.savefig("{}/{}.jpg".format(dir, title.replace(" ", "_")), bbox_inches='tight')
