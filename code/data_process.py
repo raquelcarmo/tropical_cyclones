@@ -191,6 +191,8 @@ class DataProcessor():
         '''Takes an input image and returns a cropped version of it'''
         height, width = image.shape[:2]
         if height <= self.min_height and width <= self.min_width:
+            if new_bbox_values is None:
+                new_bbox_values = np.zeros(4)
             return image, new_bbox_values
 
         new_values = None
@@ -198,6 +200,7 @@ class DataProcessor():
             # there is no eye, select random crop with dimensions (MIN_HEIGHT, MIN_WIDTH)
             box_to_crop = self.select_crop(image, eye=False)
             (x, y, w, h) = box_to_crop
+            new_values = np.array([x, y, w, h])
 
         else:
             # read dimensions of bbox_eye
