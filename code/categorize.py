@@ -46,7 +46,7 @@ def train_categorization(args):
     catNet = CategorizationCNN(args)
 
     print("Entering in K-fold Cross Validation...")
-    stratified_k_fold = StratifiedKFold(n_splits=n_splits=args['nb_splits'], random_state=42, shuffle=False)
+    stratified_k_fold = StratifiedKFold(n_splits=n_splits=args['nb_splits'], shuffle=False)
     fold_var = 1
 
     for train_index, val_index in stratified_k_fold.split(np.zeros(len(df)), Y):
@@ -78,7 +78,7 @@ def train_categorization(args):
             validation_loss = history1.history['val_loss']
 
             # build and train unfrozen model
-            catNet.__buildftStage2()
+            catNet.buildftStage2()
             history2 = catNet.trainftStage2(train_ds_perf, val_ds_perf, class_weights, history1, fold_var)
 
             acc += history2.history['accuracy']
@@ -100,7 +100,7 @@ def train_categorization(args):
 
         print("Loading best weights from training...")
         catNet.get_eval(val_ds_perf, fold_var)
-        catNet.get_preds(val_ds_perf, val_ds.map(lambda x, y: y), fold_var)
+        catNet.get_preds(val_ds_perf, np.array([tfds.as_numpy(label) for image, label in val_ds]), fold_var)
 
         ### Grad-CAM analysis ###
         # train dataset
@@ -114,8 +114,7 @@ def train_categorization(args):
         utils.grad_cam(catNet.model, val_ds, val_ds_norm, catNet.model.predict(val_ds_perf), gradcam_path, args)
 
         # reset model and clear session
-        tf.keras.backend.clear_session()
-        catNet.__reset()
+        catNet.reset()
         fold_var += 1
 
     # save the values for each fold

@@ -48,7 +48,7 @@ def train_detection(args):
     detNet = DetectionCNN(args)
     
     print("Entering in K-fold Cross Validation...")
-    stratified_k_fold = StratifiedKFold(n_splits=args['nb_splits'], random_state=42, shuffle=False)
+    stratified_k_fold = StratifiedKFold(n_splits=args['nb_splits'], shuffle=False)
     fold_var = 1
 
     for train_index, val_index in stratified_k_fold.split(np.zeros(len(df)), Y):
@@ -81,11 +81,10 @@ def train_detection(args):
 
         print("Loading best weights from training...")
         detNet.get_eval(val_ds_perf, fold_var)
-        detNet.get_preds(val_ds_perf, val_labels, fold_var)
+        detNet.get_preds(val_ds_perf, np.array([tfds.as_numpy(label) for image, label in val_ds]), fold_var)
 
         # reset model and clear session
-        tf.keras.backend.clear_session()
-        detNet.__reset()
+        detNet.reset()
         fold_var += 1
 
     # save the values for each fold
